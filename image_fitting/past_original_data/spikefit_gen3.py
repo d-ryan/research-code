@@ -773,49 +773,7 @@ if __name__=='__main__':
         plt.savefig(savename+'ints.svg')
         plt.clf()
         print 'Saved file: '+savename+'.npz'
-        '''
-        #ABOVE THIS POINT: Image has not been operated on.
-        
-        
-        #BELOW THIS POINT: Bad-pixel-fixing.
-        print 'BPF Image:'
-        masked = mask_bad_pix(rotated)
-        fixed = fill_bad_pix(masked)
-        cenguess = guess_center(fixed) #rough locations of said spikes
-        print cenguess
-        px,py,bx,by = fit_both(fixed,cenguess)
-        horiz = px[1,:]
-        vert = py[1,:]
-        inds = np.arange(len(horiz))
-        
-        plh,plv,pph,ppv,pch,pcv = polynomial_fit(horiz,vert)
-        
-        ltup = tuple(plh)+tuple(plv)
-        ptup = tuple(pph)+tuple(ppv)
-        ctup = tuple(pch)+tuple(pcv)
-        
-        ints = np.zeros((3,2))
-        
-        ints[0,:] = find_ints(crossline,cenguess,ltup)
-        ints[1,:] = find_ints(crossparab,cenguess,ptup)
-        ints[2,:] = find_ints(crosscubic,cenguess,ctup)
-        
-        savename = prefix+obsnums[i]+'/'+obsids[i]+'/'+obsnums[i]+'_'+obsids[i]+'_'+lambdas[i]+'_bpf'
-        snames.append(savename)
-        angle=-drzangle+np.pi/4.
-        np.savez_compressed(savename,img=fixed,pad=pad,angle=angle,guess=cenguess,px=px,py=py,plh=plh,plv=plv,
-            pph=pph,ppv=ppv,pch=pch,pcv=pcv,ints=ints,fname=f)
-            
-        plt.plot(inds,horiz,'bo',vert,inds,'go')
-        plt.plot(inds,line(inds,*plh),'b-',line(inds,*plv),inds,'g-')
-        plt.plot(inds,parab(inds,*pph),'b--',parab(inds,*ppv),inds,'g--')
-        plt.plot(inds,cubic(inds,*pch),'b:',cubic(inds,*pcv),inds,'g:')
-        plt.xlim([min(inds),max(inds)])
-        plt.ylim([min(inds),max(inds)])
-        plt.savefig(savename+'.svg')
-        plt.clf()
-        print 'Saved file: '+savename+'.npz'
-        '''
+
         
         
         

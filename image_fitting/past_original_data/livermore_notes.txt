@@ -1,0 +1,36 @@
+1/23:
+
+TO DO For 1/24
+
+Ask James and Paul if Mark can join our Wed 11 am meeting this week
+
+TO do for spikes:
+
+Get fitting working
+--add ACS background, photon noise + other error sources
+(ghosts/the cuspy thing)
+
+For Milli 2017 on HD 206893 :: calculate astrometric amplitude
+
+
+
+Other topics:
+-Putting thorough research plans together
+-BP should be doable now. Get reasonable tests of my spikefitting.
+-Other objects need GAIA end-of-year data for higher precision on 
+reference stars (case in point, HD206893)
+-MCMC :: verifying independence of relative & absolute params
+       + getting MCMC to converge in a reasonable time in
+       high-dimentional parameter spaces
+       + unbiased estimators for orbital params
+       + general analysis of orbital sampling: MCMC vs OFTI,
+           observation cadence, period fraction needed in
+           different geometries, different orbital families
+       + bound vs unbound orbit fits
+-Spikefits::
+--Thorough comparison bw Tiny Tim and PROPER and real data
+----add ghosts, photon noise, read noise, other sources of background
+--Verify that spikefitting accurately centers star, regardless of
+  any chromatic or field-dependent effect
+--Verify that spikefitting + centroiding can yield good astrometry
+  of ref stars AND target stars together

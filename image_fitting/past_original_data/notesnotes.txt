@@ -1,0 +1,11 @@
+Notes:
+
+For next week's meeting:
+
+--Timeline of project/roles : discuss with Mark
+--List of objectives using Tiny Tim
+----1) Characterize accuracy of spikefits & quantify any errors
+----2) Examine residuals vs real observations
+--HST Calibration observations that would be useful to us
+----bright star with big diffraction spikes and a rich field of background stars?
+----Binary with a well-known orbit?

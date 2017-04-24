@@ -1,0 +1,148 @@
+Code changelog:
+
+Initial code completed 5/17
+
+spikefit_wfpc_dev (to replace spikefit_wfpc eventually)
+
+Using fits header file information, extract the FIRST drizzle angle.
+Rotating clockwise by this value makes the image "squared up," with the
+planetary camera in the top-right and the diffraction spikes diagonal.
+Rotating CCW by an additional pi/4 puts the planetary camera straight up,
+and the diffraction spikes vertical and horizontal.
+
+Before rotation, the image is zero-padded to be sqrt(2) larger in each dimension.
+This ensures no portion of the original image will "fall off" the rotated image.
+
+This rotation method works as long as the image has a drizzle angle listed in its header.
+In the unlikely case that an image already has its spikes vertical/horizontal, this method
+ensures the correct orientation of the image (e.g. rotates hst_05202_01 by 90 degrees so that
+the PC is up instead of right) so that "THE" vertical spike is the one running from the PC
+to the opposite panel of the WF camera. "THE" horizontal spike runs through the two side panels
+of the WF camera.
+
+To guess the locations of the diffraction spikes:
+The image is summed along each axis, producing a single column of the total row values,
+and a single row of the total column values. A median filter is applied to each vector to smooth out
+problematic effects due to hot pixels/artifacts/etc. 
+The pixel with the highest value in the collapsed column (row) represents the y (x) coordinate of the
+horizontal (vertical) diffraction spike.
+
+With the image correctly oriented:
+Using the guessed location of the diffraction spikes, my code runs scipy.optimize.curve_fit (a convenient
+least-squares optimization routine) to fit a sinc^2 profile to the 80 pixels surrounding the guessed value.
+(For the horizontal spike, this means fitting the sinc^2 to an 80-pixel column around the guessed value. This
+is repeated for each column in the image, typically ~3000.)
+
+Operates on a directory containing ONLY fits files
+Input files: *.fits
+outputs: *.svg file plotting fitted spikes for each input fits file
+         *.npz file containing full spikefit data (locations and best-fit parameters) for each input fits file
+      info.npz file containing a summary of the set of input files; useful for keeping track of things
+      
+Helper code: compare_ints_().py (name of file is star, instrument specific--working on generalizing)
+        Uses info.npz and *.npz files produced by spikefit.py to store intersects in a csv file.
+
+
+
+5/20:
+
+Determined the reason for spurious fitting of "whitespace" near the image.
+The code grabs a column around the guessed spike position; if this column contains nonzero values,
+the code will attempt to fit a sinc^2 profile--even if the values near the guessed spike position ARE zero.
+This occurs wherever a spike runs off the (diagonal) edge of the detector.
+
+The code fits a sinc^2 which peaks where the image values are zero, but only EVALUATES the validity of the fit
+where the image values are NONZERO, out in the distant wings of the sinc^2. So the very slight fluctuations
+in the value of sinc^2 can approximately match the slight fluctuations in the image far from any actual
+sources of light; the code decides "sure, good enough," and decides on some slightly more optimal parameters
+than my initial guess. This leads to the appearance that the code has fit the nonexistant extension of the
+diffraction spike off the edge of the detector.
+
+This effect does not occur for points slightly farther out, such that a column (row) does not intersect the
+detector at all; for these more distant points, the code has nothing against which to evaluate the fit and
+returns exactly the initial guess.
+
+This will be corrected by ignoring all off-detector points when fitting polynomials to the diffraction spike
+maxima.
+
+5/26:
+
+Implemented correction for off-detector points (will no longer be included in the fit, and CAN be ignored
+in plotting) as well as for blatant outliers (currently those more than 1.5sigma away from the guessed value)
+
+
+5/31:
+
+Rewrote spikefitting code for greater generality, more flexibility if images don't comform to the wfpc
+header format.
+This code should apply to Paul's stis fomalhaut and (eventually) acs hd106906 image.
+
+6/1:
+Improved code to filter out off-image points, points on edges, points near center.
+Improved code to guess at the center twice: after the first attempt, the region around the center is masked,
+and the center is guessed again; this allows most of the effect of the star to be ignored, so that the
+center is guessed almost purely from the diffraction spikes.
+STIS image: well-fit, centered within 0.2px
+HD106906: not happy. Requires very different code w/ current-version improvements applied to much-older-version
+    paired sinc^2 functions. Will write this today.
+    
+    
+    
+
+
+6/21:
+Analyzed 28 frames of fomalhaut image. Quadratic fit seems best for between-frame consistency.
+The x values are relatively consistent (within 0.05 pix) while the y values decrease roughly linearly
+by about 0.25 pixels over the course of the sequence.
+
+Need to look at residuals for the three fit methods for these images.
+
+I have discovered it is possible to write excel FORMULAE to a csv file with python. If done correctly,
+this will allow me to generate the image spreadsheets nigh-instantly.
+
+
+6/22:
+Implemented writing of excel formulae to CSV file, and pre-sorting of files to ensure
+sequential observations go into the spreadsheet in the correct order.
+
+James raised data stewardship concerns re: use of excel. Data are first stored in .npz numpy archives,
+which are not modifiable by stray clicks. The changes I made to the code this morning make it possible to
+immediately re-generate an essentially-complete spreadsheet from the .npz archive, so any human errors
+involved in the use of excel can be reversed very quickly.
+
+One of Paul's images (15) was a duplicate of the one preceding (14). Old files have been split off as
+/F/Fomalhaut/stis2013full_wrong14/. Corrected files are found in /F/Fomalhaut/stis2013full/.
+
+Split off current version of code as spikefit_stis_fmh.py; that version is stable.
+Development will continue on spikefit_gen_dev.py.
+
+
+6/23: At Livermore. Investigating brown dwarfs from Sahlmann et al '10 for dynamical mass measurement.
+See F:/browndwarfs.xlsx --currently on hold; Mark suggested the improvement over previous work would be
+too marginal to be worth doing.
+
+Also waiting on two MAST data requests; icyte1ccq, icyte0acq for CD-35 2722
+and j9bc17011, j9bc17021 for PZ Tel B.
+
+
+6/24:
+Let's start with residuals, they're easy.
+
+ 
+6/27:
+Modified spikefit_gen_dev to NOT use a foolish guess at deviation from median for the error bars on points
+when fitting a polynomial to spike maxima.
+
+Better method: fit a line to the data, and reject any points more than (1.5 pix? 2 pix?) discrepant from
+this line. POSSIBLY use deviations from this line as error bars in doing subsequent fits.
+
+Write a reduced chi^2 function to accurately calculate goodness of fit.
+Should take: x, y, yfunc, yfuncparams, [err], accurately calculate degrees of freedom (N-p-1).
+
+
+
+To-do list:
+Radon transform
+Residuals
+Dual spikes
+Brown dwarfs

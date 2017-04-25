@@ -44,7 +44,7 @@ from bad_pixel_fix import mask_bad_pix,fill_bad_pix
 if __name__=='__main__':
 
     
-    prefix = 'F:/PSF_modeling/acswfc1/'
+    prefix = 'F:/PSF_modeling/acswfc2/'
     bad_deviation = 1.5
 
     #First, look at all the files, make note of their names, make sure we have
@@ -273,7 +273,7 @@ def dsreg(x,A,cen,s1,s2,c):
     t2 = np.sinc(s2*(x-cen))**2.
     return A*t1*t2+c
     
-def gauss(x,A,mu,sig,o):
+def gauss(x,A,mu,sig):
     '''
     gaussian with width sig, mean mu, normalization A and additive offset o
     '''
@@ -324,23 +324,25 @@ def get_dec(vals):
     wr = w-1
     desc = True
     end = len(vals)-1
-    if wl<end:
-        while desc:
-            if vals[wl]<vals[wl-1]:
+    while desc:
+        if wl<end-1:
+            if vals[wl+1]<vals[wl]:
                 if wl==end:
                     break
                 else:
                     wl+=1
             else: desc = False
+        else: break
     desc = True
-    if wr>0:
-        while desc:
+    while desc:
+        if wr>0:
             if vals[wr-1]<vals[wr]:
                 if wr==0:
                     break
                 else:
                     wr-=1
             else: desc = False
+        else: break
     arr_inds = np.arange(wr,wl+1).astype('int')
     arr_slice = vals[wr:wl+1]
     return arr_inds,arr_slice
@@ -365,7 +367,7 @@ def fit_both(img,cenguess,fitfn):
     
     px=np.zeros((3.,shp))-1.
     py=np.zeros((3.,shp))-1.
-    bounds = (np.array([0.,0.,0.,-np.inf]),np.array([np.inf for i in range(4)]))
+    bounds = (np.array([0.,0.,0.]),np.array([np.inf for i in range(3)]))
 
     badsx=[]
     badsy=[]
@@ -379,7 +381,7 @@ def fit_both(img,cenguess,fitfn):
         imod = i-cen
         offset = img[nz,i]-np.mean(img[nz,i])
         
-        p0=(np.max(img[:,i]),yguess,.2,1)
+        p0=(np.max(img[:,i]),yguess,.2)
         #print i
         #bounds=([offset.max()/100,yguess-40,-np.inf,-np.inf],[offset.max()*100,yguess+40,np.inf,np.inf])
         if len(nz)>84: #Fit the central 80 pixels (arbitrary)
@@ -390,10 +392,12 @@ def fit_both(img,cenguess,fitfn):
             try:
                 #if not split: p0=(np.sqrt(fitvals.max()),yguess,.2,0.)
                 #else: p0=(np.sqrt(fitvals.max()),yguess-imod/100.,.2,fitvals.max(),yguess+imod/100.,.2,0.)
-                if fitfn==dso:
-                    px[:,i],c=curve_fit(fitfn,fitcoords,fitvals,p0=p0,bounds=bounds,max_nfev=1000*len(fitcoords))#,sigma=1./np.sqrt(np.abs(fitvals)))
-                else:
-                    px[:,i],c=curve_fit(fitfn,fitcoords,fitvals,p0=p0,bounds=bounds,sigma=1./np.sqrt(np.abs(fitvals)))
+                #pdb.set_trace()
+                #if fitfn==dso:
+                #    px[:,i],c=curve_fit(fitfn,fitcoords,fitvals,p0=p0,bounds=bounds,max_nfev=1000**2*len(fitcoords))#,sigma=1./np.sqrt(np.abs(fitvals)))
+                #else:
+                #    px[:,i],c=curve_fit(fitfn,fitcoords,fitvals,p0=p0,bounds=bounds,sigma=1./np.sqrt(np.abs(fitvals)),max_nfev=10000**2*len(fitcoords))
+                px[:,i],c = curve_fit(fitfn,fitcoords,fitvals,p0=p0,maxfev=100**4)
                 check_params(px[:,i],p0)
                 #if fitfn!=dso: pdb.set_trace()
                 #print i,'fit'
@@ -429,7 +433,7 @@ def fit_both(img,cenguess,fitfn):
         nz = np.where(img[i,:]>0)[0]
         imod = i-cen
         offset = img[i,nz]-np.mean(img[i,nz])
-        p0=(np.max(img[:,i]),xguess,.2,1)
+        p0=(np.max(img[:,i]),xguess,.2)
         
 
         #bounds=([offset.max()/100,xguess-40,-np.inf,-np.inf],[offset.max()*100,xguess+40,np.inf,np.inf])
@@ -442,10 +446,7 @@ def fit_both(img,cenguess,fitfn):
             try:
                 #if not split: p0=(np.sqrt(fitvals.max()),xguess,.2,0.)
                 #else: p0=(np.sqrt(fitvals.max()),yguess-imod/100.,.2,fitvals.max(),yguess+imod/100.,.2,0.)
-                if fitfn==dso:
-                    py[:,i],c=curve_fit(fitfn,fitcoords,fitvals,p0=p0,bounds=bounds,max_nfev=1000*len(fitcoords))#,sigma=1./np.sqrt(np.abs(fitvals)))
-                else:
-                    py[:,i],c=curve_fit(fitfn,fitcoords,fitvals,p0=p0,bounds=bounds,sigma=1./np.sqrt(np.abs(fitvals)))
+                py[:,i],c = curve_fit(fitfn,fitcoords,fitvals,p0=p0,maxfev=100**4)
                 check_params(py[:,i],p0)
             except:
                 badsy.append(i)
@@ -483,22 +484,22 @@ def polynomial_fit(hinds,horiz,vinds,vert):
     #i_v = i_v[fitv<max(inds)]
     #fith = fith[fith<max(inds)]
     #fitv = fitv[fitv<max(inds)]
-    medh = np.median(fith) #median in case any remaining stragglers would throw off the mean
-    medv = np.median(fitv)
+    #medh = np.median(fith) #median in case any remaining stragglers would throw off the mean
+    #medv = np.median(fitv)
     
-    sigh = np.abs(fith-medh)+.1
-    sigv = np.abs(fitv-medv)+.1
+    #sigh = np.abs(fith-medh)+.1
+    #sigv = np.abs(fitv-medv)+.1
     #plt.plot(i_h,fith,'bo',fitv,i_v,'go')
     #plt.xlim([min(inds),max(inds)])
     #plt.ylim([min(inds),max(inds)])
     #plt.show()
-    print len(i_h),len(fith),len(sigh)
-    plh,c = curve_fit(line,i_h,fith,sigma=sigh)
-    plv,c = curve_fit(line,i_v,fitv,sigma=sigv)
-    pph,c = curve_fit(parab,i_h,fith,sigma=sigh)
-    ppv,c = curve_fit(parab,i_v,fitv,sigma=sigv)
-    pch,c = curve_fit(cubic,i_h,fith,sigma=sigh)
-    pcv,c = curve_fit(cubic,i_v,fitv,sigma=sigv)
+    #print len(i_h),len(fith),len(sigh)
+    plh,c = curve_fit(line,i_h,fith)
+    plv,c = curve_fit(line,i_v,fitv)
+    pph,c = curve_fit(parab,i_h,fith)
+    ppv,c = curve_fit(parab,i_v,fitv)
+    pch,c = curve_fit(cubic,i_h,fith)
+    pcv,c = curve_fit(cubic,i_v,fitv)
     
     return plh,plv,pph,ppv,pch,pcv
     
@@ -652,7 +653,7 @@ split = False
 if __name__=='__main__':
     for i,f in enumerate(fnames):
         print '\nOperating on file',f
-        if i>0: break
+        #if i>0: break
         img,drzangle = get_data(prefix+f,index=0,drz=False) #raw data
         square,diff = make_square(img)
         big,pad = padding(square) #padded; no rotation losses due to hitting edge of field
@@ -679,9 +680,14 @@ if __name__=='__main__':
                 vert = py[1,:]
             inds = np.arange(rotated.shape[0])
             #print len(inds)
-            
+            #pdb.set_trace()
             #Will need two sets for each direction
             good_hs,good_horiz,good_vs,good_vert = find_goods(rotated,horiz,vert,cenguess,iterations=5)
+            
+            ##plt.imshow(np.log(rotated),origin='lower',cmap=plt.cm.gray)
+            #plt.plot(good_hs,good_horiz,'bo')
+            #plt.plot(good_vert,good_vs,'go')
+            #plt.show()
             
             #will need two sets for each direction
             plh,plv,pph,ppv,pch,pcv = polynomial_fit(good_hs,good_horiz,good_vs,good_vert)
@@ -758,10 +764,10 @@ if __name__=='__main__':
         plt.savefig(savename+'.svg')
         plt.clf()
         plt.plot(1174,1174,'bo')
-        plt.plot(ints[0,0,0],ints[0,1,0],'ro',label='Double slit')
-        plt.plot(ints[0,0,1],ints[0,1,1],'yo')
-        plt.plot(ints[0,0,2],ints[0,1,2],'go',label='Gaussian')
-        plt.plot(ints[0,0,3],ints[0,1,3],'co',label='sinc^2')
+        plt.plot(ints[0,0,0],ints[0,1,0],'ro',label='Gauss')
+        #plt.plot(ints[0,0,1],ints[0,1,1],'yo')
+        #plt.plot(ints[0,0,2],ints[0,1,2],'go',label='Gaussian')
+        #plt.plot(ints[0,0,3],ints[0,1,3],'co',label='sinc^2')
         plt.plot(ints[0,0,4],ints[0,1,4],'mo',label='brightest pixel trace')
         plt.plot(ints[0,0,5],ints[0,1,5],'ko',label='Bond parabola')
         #pdb.set_trace()
@@ -772,6 +778,7 @@ if __name__=='__main__':
         plt.savefig(savename+'ints.svg')
         plt.clf()
         print 'Saved file: '+savename+'.npz'
+        print ints[:,:,0]
 
         
         

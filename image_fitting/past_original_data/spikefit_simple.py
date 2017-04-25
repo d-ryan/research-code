@@ -384,7 +384,7 @@ def fit_both(img,cenguess,fitfn):
         #bounds=([offset.max()/100,yguess-40,-np.inf,-np.inf],[offset.max()*100,yguess+40,np.inf,np.inf])
         if len(nz)>84: #Fit the central 80 pixels (arbitrary)
             coord = np.arange(int(round(yguess))-40,int(round(yguess))+40,1)
-            vals = img[fitcoords,i] #-np.mean(img[nz,i])
+            vals = img[coord,i] #-np.mean(img[nz,i])
             interm,fitvals = get_dec(vals)
             fitcoords = coord[interm]
             try:
@@ -434,8 +434,10 @@ def fit_both(img,cenguess,fitfn):
 
         #bounds=([offset.max()/100,xguess-40,-np.inf,-np.inf],[offset.max()*100,xguess+40,np.inf,np.inf])
         if len(nz)>84: #Fit the central 80 pixels (arbitrary)
-            fitcoords = np.arange(int(round(xguess))-40,int(round(xguess))+40,1)
-            fitvals = img[i,fitcoords]-np.mean(img[i,nz])
+            coord = np.arange(int(round(xguess))-40,int(round(xguess))+40,1)
+            vals = img[i,coord] #-np.mean(img[nz,i])
+            interm,fitvals = get_dec(vals)
+            fitcoords = coord[interm]
             
             try:
                 #if not split: p0=(np.sqrt(fitvals.max()),xguess,.2,0.)

@@ -363,8 +363,8 @@ def fit_both(img,cenguess,fitfn):
     cen=shp//2
     inds = np.arange(shp)
     
-    px=np.zeros((4.,shp))-1.
-    py=np.zeros((4.,shp))-1.
+    px=np.zeros((3.,shp))-1.
+    py=np.zeros((3.,shp))-1.
     bounds = (np.array([0.,0.,0.,-np.inf]),np.array([np.inf for i in range(4)]))
 
     badsx=[]
@@ -383,8 +383,10 @@ def fit_both(img,cenguess,fitfn):
         #print i
         #bounds=([offset.max()/100,yguess-40,-np.inf,-np.inf],[offset.max()*100,yguess+40,np.inf,np.inf])
         if len(nz)>84: #Fit the central 80 pixels (arbitrary)
-            fitcoords = np.arange(int(round(yguess))-40,int(round(yguess))+40,1)
-            fitvals = img[fitcoords,i] #-np.mean(img[nz,i])
+            coord = np.arange(int(round(yguess))-40,int(round(yguess))+40,1)
+            vals = img[fitcoords,i] #-np.mean(img[nz,i])
+            interm,fitvals = get_dec(vals)
+            fitcoords = coord[interm]
             try:
                 #if not split: p0=(np.sqrt(fitvals.max()),yguess,.2,0.)
                 #else: p0=(np.sqrt(fitvals.max()),yguess-imod/100.,.2,fitvals.max(),yguess+imod/100.,.2,0.)
@@ -648,7 +650,7 @@ split = False
 if __name__=='__main__':
     for i,f in enumerate(fnames):
         print '\nOperating on file',f
-        #if i>0: break
+        if i>0: break
         img,drzangle = get_data(prefix+f,index=0,drz=False) #raw data
         square,diff = make_square(img)
         big,pad = padding(square) #padded; no rotation losses due to hitting edge of field
@@ -657,7 +659,7 @@ if __name__=='__main__':
         cenguess = guess_center(rotated) #rough locations of said spikes
         print cenguess
         
-        fitfns = [dso,dsreg,gauss,sinc2]
+        fitfns = [gauss]
         '''---NEEDS WORK---'''
         ints = np.zeros((3,2,6))
         for j,fitfn in enumerate(fitfns):
@@ -689,19 +691,9 @@ if __name__=='__main__':
             ints[0,:,j] = find_ints(crossline,cenguess,ltup)
             ints[1,:,j] = find_ints(crossparab,cenguess,ptup)
             ints[2,:,j] = find_ints(crosscubic,cenguess,ctup)
-            #if j==0:
-            #    plt.imshow(np.log(rotated),origin='lower',cmap=plt.cm.gray)
-            #    plt.plot(good_hs,good_horiz,'co')
-            #    plt.plot(good_vert,good_vs,'yo')
-            #    plt.show()
-            #    pdb.set_trace()
-            #    plt.plot(rotated[1600,:])
-            #    plt.plot(dso(inds,*py[:,1600]))
-            #    plt.show()
 
-            #    pdb.set_trace()
             
-            savename = prefix+'test/'+f
+            savename = prefix+'narrow_gauss/'+f
             snames.append(savename)
             angle=-drzangle+np.pi/4.
         
@@ -710,7 +702,7 @@ if __name__=='__main__':
                 pph=pph,ppv=ppv,pch=pch,pcv=pcv,ints=ints,good_hs=good_hs,good_vs=good_vs,good_horiz=good_horiz,
                 good_vert=good_vert,fname=f)
             #savename = prefix+obsnums[i]+'/'+obsids[i]+'/'+obsnums[i]+'_'+obsids[i]+'_'+lambdas[i]
-        savename = prefix+'test/'+f
+        savename = prefix+'narrow_gauss/'+f
         snames.append(savename)
         angle=-drzangle+np.pi/4.
         inds = np.arange(rotated.shape[0])
@@ -792,6 +784,6 @@ if __name__=='__main__':
         
         #    print 'Something went wrong for',f
         #    errors.append(f)
-    np.savez_compressed(prefix+'test/info',snames=snames,errors=errors)
+    np.savez_compressed(prefix+'narrow_gauss/info',snames=snames,errors=errors)
     #To do: Test this, then apply it to HPF, BPF, and smoothed images
 

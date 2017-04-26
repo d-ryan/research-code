@@ -44,7 +44,7 @@ from bad_pixel_fix import mask_bad_pix,fill_bad_pix
 if __name__=='__main__':
 
     
-    prefix = 'F:/PSF_modeling/acswfc2/'
+    prefix = 'F:/PSF_modeling/acswfc1/'
     bad_deviation = 1.5
 
     #First, look at all the files, make note of their names, make sure we have
@@ -657,8 +657,8 @@ if __name__=='__main__':
         img,drzangle = get_data(prefix+f,index=0,drz=False) #raw data
         square,diff = make_square(img)
         big,pad = padding(square) #padded; no rotation losses due to hitting edge of field
-        #rotated = derotate(big,drzangle) #rotated to have spikes vert & horiz
-        rotated = big
+        rotated = derotate(big,drzangle) #rotated to have spikes vert & horiz
+        #rotated = big
         cenguess = guess_center(rotated) #rough locations of said spikes
         print cenguess
         
@@ -732,7 +732,9 @@ if __name__=='__main__':
             p,c = curve_fit(parab,ys,rotated[j,ys])
             cens[j,1]=-p[1]/2./p[0]
 
-        plh,plv,pph,ppv,pch,pcv = polynomial_fit(inds,brightest[:,0],inds,brightest[:,1])
+        good_hs,good_horiz,good_vs,good_vert = find_goods(rotated,brightest[:,0],brightest[:,1],cenguess,iterations=2)
+        
+        plh,plv,pph,ppv,pch,pcv = polynomial_fit(good_hs,good_horiz,good_vs,good_vert)
         ltup = tuple(plh)+tuple(plv)
         ptup = tuple(pph)+tuple(ppv)
         ctup = tuple(pch)+tuple(pcv)
@@ -741,7 +743,9 @@ if __name__=='__main__':
         ints[1,:,4] = find_ints(crossparab,cenguess,ptup)
         ints[2,:,4] = find_ints(crosscubic,cenguess,ctup)
         
-        plh,plv,pph,ppv,pch,pcv = polynomial_fit(inds,cens[:,0],inds,cens[:,1])
+        good_hs,good_horiz,good_vs,good_vert = find_goods(rotated,cens[:,0],cens[:,1],cenguess,iterations=2)
+        
+        plh,plv,pph,ppv,pch,pcv = polynomial_fit(good_hs,good_horiz,good_vs,good_vert)
         ltup = tuple(plh)+tuple(plv)
         ptup = tuple(pph)+tuple(ppv)
         ctup = tuple(pch)+tuple(pcv)
@@ -749,7 +753,7 @@ if __name__=='__main__':
         ints[0,:,5] = find_ints(crossline,cenguess,ltup)
         ints[1,:,5] = find_ints(crossparab,cenguess,ptup)
         ints[2,:,5] = find_ints(crosscubic,cenguess,ctup)
-    
+        #pdb.set_trace()
         np.savez_compressed(savename,img=rotated,orig=img,diff=diff,pad=pad,angle=angle,guess=cenguess,px=px,py=py,plh=plh,plv=plv,
             pph=pph,ppv=ppv,pch=pch,pcv=pcv,ints=ints,good_hs=good_hs,good_vs=good_vs,good_horiz=good_horiz,
             good_vert=good_vert,fname=f,brightest=brightest,lows=lows,highs=highs)

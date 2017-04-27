@@ -1,30 +1,26 @@
 '''
-New, complete spikefitting function
+Needed improvements:
+--correctly identify primary peak even when spike amplitudes fluctuate enough that the "secondary" peak is larger
+--relatedly, improve rejection of incorrectly fit spike maxima (compare residuals against some threshold? How to compute that threshold?)
+--generalizability: should modify this file much less than I currently do
+--robustness: in order to NOT modify this file all the time, code needs to break less
+--Returning and recording errors
+--Better plotting technique for comparing errors at different chip locations (color-coding?)
 
-1--receive filename[s]; retain for later reference
-2--load up the image, pad & derotate it
-3--display the file[s] on log scale and request approximate center (should be ~1567,1061)
-4--fit horizontal & vertical spikes
-5--apply polynomial fits
-6--calculate intersects
-7--save all the data: spikes, fits, ints, original fname; save also fits & ints overlaid on image
+--sqrt of variance rather than sigma; remove sigma in prefactor so that A == max of img slice
 
-8--repeat 4-7 for a high-pass-filtered image
-9--repeat 4-7 for a bad-pixel-fixed image
-10--repeat 4-7 for a smoothed image
-11--HPF&BPF
-12--HPF&smoothed
-13--BPF&smoothed
-14--HPF,BPF,smoothed
+mu = sum(xi*Ii)/sum(Ii)
+analytic expressions : first moment, and difference between second moment and square of first
+^ These also provide some measure of deviation from gaussian-ness, along with chi^2
 
-To-do: compare radon transform (from skimage & the more cost-effective method) vs this thing
-       and evaluate accuracy/uncertainty of each centering method
-       
-       plug outlier-resistant fit into this thing
+on interference b/w spikes and airy rings: "speckle pinning" : static aberrations combining with random errors in
+the phase or in the optics, the speckles preferentially appear on the peaks of diffraction features
+READ: Bloemhof et al 2001 on speckle pinning (ApJL 558 L71)
+Soummer et al 2004 (figure 2)
+
+Get a mathematica license
+
 '''
-#NOTE: changes have been made to this file to run on non-fmh stis images. 
-#Dominic of the future:
-#version control this garbage
 
 import numpy as np
 from astropy.io import fits
@@ -44,7 +40,7 @@ from bad_pixel_fix import mask_bad_pix,fill_bad_pix
 if __name__=='__main__':
 
     
-    prefix = 'F:/PSF_modeling/acswfc1/'
+    prefix = 'samples/'
     bad_deviation = 1.5
 
     #First, look at all the files, make note of their names, make sure we have
@@ -69,22 +65,8 @@ if __name__=='__main__':
     
     nfiles = len(fnames)        
     print 'Operating on '+str(nfiles)+' files.'
-'''
-#Make directories if needed
-for i,id in enumerate(obsids):
-    try:
-        os.chdir(prefix+obsnums[i]+'/'+id)
-        os.chdir(prefix)
-    except WindowsError:
-        os.mkdir(prefix+obsnums[i]+'/'+id)
-        print 'Made new directory: '+obsnums[i]+'/'+id
 
-print 'All needed directories present.'
-'''
-#prefix = 'F:/Fomalhaut/'
-#os.chdir(prefix)
-#fnames = ['vi01isu.fits']
-
+#Gaussian for centering--rewrite so only one fn needed
 def gaussg(x,mu,sig,A):
     '''
     gaussian with width sig, mean mu, multiplicative prefactor A
@@ -113,7 +95,11 @@ def cubic(x,a,b,c,d):
     
 def subcubic(x,a1,b1,c1,d1,a2,b2,c2,d2):
     return cubic(x,a1,b1,c1,d1)-cubic(x,a2,b2,c2,d2)
-    
+
+#------------------------------------------------------------------------------        
+# Functions for find_ints to compute intersects of various polynomial fit orders
+#------------------------------------------------------------------------------
+
 def crossparab(xarr,a,b,c,d,e,f):
     x=xarr[0]
     y=xarr[1]
@@ -254,7 +240,11 @@ def get_data(filename,index=1,drz=True):
         drzangle = 0.
     hdulist.close()
     return rawdata,drzangle
-    
+
+#------------------------------------------------------------------------------        
+# Various fns to fit to diffraction spike profiles
+#------------------------------------------------------------------------------
+
 def dso(x,A,cen,s1,s2,c,o):
     '''cen: center of diffraction pattern
     o: offset between diffraction center and double-slit peak
@@ -297,7 +287,6 @@ def threesinc2(x,a1,p1,s1,a2,p2,s2,a3,p3,s3,o):
     Contains only a single offset term to prevent degeneracy
     '''
     return sinc2(x,a1,p1,s1,o/3.)+sinc2(x,a2,p2,s2,o/3.)+sinc2(x,a3,p3,s3,o/3.)
-    
 
 def twosinc2(x,a1,p1,s1,a2,p2,s2,o):
     '''
@@ -305,13 +294,27 @@ def twosinc2(x,a1,p1,s1,a2,p2,s2,o):
     Contains only a single offset term to prevent degeneracy
     '''
     return sinc2(x,a1,p1,s1,o)+sinc2(x,a2,p2,s2,o)
-    
+
+#------------------------------------------------------------------------------        
+# Cheesy check for convergence of spike profile fits
+#------------------------------------------------------------------------------
     
 def check_params(px,p0):
+    '''
+    px : parameters returned from curve_fit
+    p0 : initial guess
+    Raises an error if the fit amplitude is too different from the maximum of that image slice,
+    or if the returned spike center is identically the guessed spike center (indicating the fit
+    did not converge). Other conditions can be included here.
+    '''
     if (px[0]<0.85*p0[0]) or (px[0]>1.15*p0[0]): raise ValueError
     #if px[2]<0.05: raise ValueError
     if px[1]==p0[1]: raise ValueError
     return
+
+#------------------------------------------------------------------------------        
+# Cheesy way to extract only the area around the spike max where values are decreasing
+#------------------------------------------------------------------------------
 
 def get_dec(vals):
     '''
@@ -365,15 +368,20 @@ def fit_both(img,cenguess,fitfn):
     cen=shp//2
     inds = np.arange(shp)
     
+    #Set up fit boundaries, and arrays to hold fit parameters/indices of poorly-fit profiles
     px=np.zeros((3.,shp))-1.
     py=np.zeros((3.,shp))-1.
+    cx=np.zeros((3.,3.,shp))-1.
+    cy=np.zeros((3.,3.,shp))-1.
     bounds = (np.array([0.,0.,0.]),np.array([np.inf for i in range(3)]))
 
     badsx=[]
     badsy=[]
     
+    #Make the image positive, just for simplicity
     if np.min(img)<0:
         img+=-np.min(img)+0.01
+    
     #fit horizontal spike
     print 'Fitting horizontal'
     for i in inds: #loop over columns
@@ -381,9 +389,9 @@ def fit_both(img,cenguess,fitfn):
         imod = i-cen
         offset = img[nz,i]-np.mean(img[nz,i])
         
+        #Initial guess of fit parameters: Image slice max., guessed center, arbitrary (fairly narrow) width
         p0=(np.max(img[:,i]),yguess,.2)
-        #print i
-        #bounds=([offset.max()/100,yguess-40,-np.inf,-np.inf],[offset.max()*100,yguess+40,np.inf,np.inf])
+        
         if len(nz)>84: #Fit the central 80 pixels (arbitrary)
             coord = np.arange(int(round(yguess))-40,int(round(yguess))+40,1)
             vals = img[coord,i] #-np.mean(img[nz,i])
@@ -397,7 +405,7 @@ def fit_both(img,cenguess,fitfn):
                 #    px[:,i],c=curve_fit(fitfn,fitcoords,fitvals,p0=p0,bounds=bounds,max_nfev=1000**2*len(fitcoords))#,sigma=1./np.sqrt(np.abs(fitvals)))
                 #else:
                 #    px[:,i],c=curve_fit(fitfn,fitcoords,fitvals,p0=p0,bounds=bounds,sigma=1./np.sqrt(np.abs(fitvals)),max_nfev=10000**2*len(fitcoords))
-                px[:,i],c = curve_fit(fitfn,fitcoords,fitvals,p0=p0,maxfev=100**4)
+                px[:,i],cx[:,:,i] = curve_fit(fitfn,fitcoords,fitvals,p0=p0,maxfev=100**4)
                 check_params(px[:,i],p0)
                 #if fitfn!=dso: pdb.set_trace()
                 #print i,'fit'
@@ -409,7 +417,7 @@ def fit_both(img,cenguess,fitfn):
             try:
                 #if not split: p0=(np.sqrt(offset[2:-2].max()),yguess,.2,0.)
                 #else: p0=(np.sqrt(offset[2:-2].max()),yguess-imod/100.,.2,offset[2:-2].max(),yguess+imod/100.,.2,0.)
-                px[:,i],c=curve_fit(fitfn,nz[2:-2],offset[2:-2],p0=p0,bounds=bounds,sigma=1./np.sqrt(np.abs(offset[2:-2])))
+                px[:,i],c=curve_fit(fitfn,nz[2:-2],offset[2:-2],p0=p0,bounds=bounds)#,sigma=1./np.sqrt(np.abs(offset[2:-2])))
                 check_params(px[:,i],p0)
                 #print i,' fit'
             except:
@@ -419,7 +427,7 @@ def fit_both(img,cenguess,fitfn):
             try:
                 #if not split: p0=(np.sqrt(img[:,i].max()),yguess,.2,0.)
                 #else: p0=(np.sqrt(img[:,i].max()),yguess-imod/100.,.2,img[:,i].max(),yguess+imod/100.,.2,0.)
-                px[:,i],c=curve_fit(fitfn,inds,img[:,i],p0=p0,bounds=bounds,sigma=1./np.sqrt(np.abs(img[:,i])))
+                px[:,i],c=curve_fit(fitfn,inds,img[:,i],p0=p0,bounds=bounds)#,sigma=1./np.sqrt(np.abs(img[:,i])))
                 check_params(px[:,i],p0)
                 #print i,' fit'
             except:
@@ -446,7 +454,7 @@ def fit_both(img,cenguess,fitfn):
             try:
                 #if not split: p0=(np.sqrt(fitvals.max()),xguess,.2,0.)
                 #else: p0=(np.sqrt(fitvals.max()),yguess-imod/100.,.2,fitvals.max(),yguess+imod/100.,.2,0.)
-                py[:,i],c = curve_fit(fitfn,fitcoords,fitvals,p0=p0,maxfev=100**4)
+                py[:,i],cy[:,:,i] = curve_fit(fitfn,fitcoords,fitvals,p0=p0,maxfev=100**4)
                 check_params(py[:,i],p0)
             except:
                 badsy.append(i)
@@ -471,7 +479,7 @@ def fit_both(img,cenguess,fitfn):
                 badsy.append(i)
                 
 
-    return px,py,badsx,badsy
+    return px,py,badsx,badsy,cx,cy
 
 
 def polynomial_fit(hinds,horiz,vinds,vert):
@@ -480,20 +488,7 @@ def polynomial_fit(hinds,horiz,vinds,vert):
     fitv = vert
     i_h = hinds
     i_v = vinds
-    #i_h = i_h[fith<max(inds)]
-    #i_v = i_v[fitv<max(inds)]
-    #fith = fith[fith<max(inds)]
-    #fitv = fitv[fitv<max(inds)]
-    #medh = np.median(fith) #median in case any remaining stragglers would throw off the mean
-    #medv = np.median(fitv)
     
-    #sigh = np.abs(fith-medh)+.1
-    #sigv = np.abs(fitv-medv)+.1
-    #plt.plot(i_h,fith,'bo',fitv,i_v,'go')
-    #plt.xlim([min(inds),max(inds)])
-    #plt.ylim([min(inds),max(inds)])
-    #plt.show()
-    #print len(i_h),len(fith),len(sigh)
     plh,c = curve_fit(line,i_h,fith)
     plv,c = curve_fit(line,i_v,fitv)
     pph,c = curve_fit(parab,i_h,fith)
@@ -668,16 +663,12 @@ if __name__=='__main__':
         for j,fitfn in enumerate(fitfns):
             print 'Fitting round ',j
             #Modify fit_both to accept a bool kwarg "split" for double spikes; default to False
-            px,py,bx,by = fit_both(rotated,cenguess,fitfn)
+            px,py,bx,by,cx,cy = fit_both(rotated,cenguess,fitfn)
             
 
-            #will need two sets of spike maxima
-            if j==0:
-                horiz = px[1,:]+px[-1,:]/px[2,:]
-                vert = py[1,:]+(py[-1,:]-np.pi)/py[2,:]
-            else:
-                horiz = px[1,:]
-                vert = py[1,:]
+            
+            horiz = px[1,:]
+            vert = py[1,:]
             inds = np.arange(rotated.shape[0])
             #print len(inds)
             #pdb.set_trace()
@@ -707,7 +698,7 @@ if __name__=='__main__':
         
     
             np.savez_compressed(savename+str(j),img=rotated,orig=img,diff=diff,pad=pad,angle=angle,guess=cenguess,px=px,py=py,plh=plh,plv=plv,
-                pph=pph,ppv=ppv,pch=pch,pcv=pcv,ints=ints,good_hs=good_hs,good_vs=good_vs,good_horiz=good_horiz,
+                pph=pph,ppv=ppv,pch=pch,pcv=pcv,ints=ints,good_hs=good_hs,good_vs=good_vs,good_horiz=good_horiz,cx=cx,cy=cy,
                 good_vert=good_vert,fname=f)
             #savename = prefix+obsnums[i]+'/'+obsids[i]+'/'+obsnums[i]+'_'+obsids[i]+'_'+lambdas[i]
         savename = prefix+'narrow_gauss/'+f

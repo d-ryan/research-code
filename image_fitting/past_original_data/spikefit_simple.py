@@ -40,7 +40,7 @@ from bad_pixel_fix import mask_bad_pix,fill_bad_pix
 if __name__=='__main__':
 
     
-    prefix = 'samples/'
+    prefix = 'F:/PSF_modeling/acswfc1/'
     bad_deviation = 1.5
 
     #First, look at all the files, make note of their names, make sure we have
@@ -323,6 +323,7 @@ def get_dec(vals):
     thereof in the original array.
     '''
     w = np.argmax(vals)
+    if len(vals)==80: w=40
     wl = w+1
     wr = w-1
     desc = True
@@ -652,8 +653,8 @@ if __name__=='__main__':
         img,drzangle = get_data(prefix+f,index=0,drz=False) #raw data
         square,diff = make_square(img)
         big,pad = padding(square) #padded; no rotation losses due to hitting edge of field
-        rotated = derotate(big,drzangle) #rotated to have spikes vert & horiz
-        #rotated = big
+        #rotated = derotate(big,drzangle) #rotated to have spikes vert & horiz
+        rotated = big
         cenguess = guess_center(rotated) #rough locations of said spikes
         print cenguess
         
